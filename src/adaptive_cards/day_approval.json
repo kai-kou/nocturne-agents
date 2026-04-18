@@ -1,0 +1,123 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "🐦 澪（Mio-01）から警戒アラートです",
+      "weight": "Bolder",
+      "size": "Medium",
+      "color": "Warning"
+    },
+    {
+      "type": "FactSet",
+      "facts": [
+        { "title": "インシデントID", "value": "${incident_id}" },
+        { "title": "リスクスコア", "value": "${risk_score} / 100" },
+        { "title": "重大度", "value": "${severity}" },
+        { "title": "炎上予測", "value": "約 ${predicted_escalation_hours} 時間後" },
+        { "title": "検出日時", "value": "${detected_at}" }
+      ]
+    },
+    {
+      "type": "TextBlock",
+      "text": "📝 該当投稿",
+      "weight": "Bolder",
+      "spacing": "Medium"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${tweet_text}",
+      "wrap": true,
+      "color": "Default"
+    },
+    {
+      "type": "TextBlock",
+      "text": "⚠️ リスク要因",
+      "weight": "Bolder",
+      "spacing": "Medium"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${risk_factors}",
+      "wrap": true,
+      "color": "Attention"
+    },
+    {
+      "type": "TextBlock",
+      "text": "💡 澪の対応案",
+      "weight": "Bolder",
+      "spacing": "Medium"
+    },
+    {
+      "type": "TextBlock",
+      "text": "1️⃣ ${action_1}",
+      "wrap": true
+    },
+    {
+      "type": "TextBlock",
+      "text": "2️⃣ ${action_2}",
+      "wrap": true
+    },
+    {
+      "type": "TextBlock",
+      "text": "3️⃣ ${action_3}",
+      "wrap": true
+    },
+    {
+      "type": "Input.Text",
+      "id": "custom_response",
+      "placeholder": "修正案を入力（修正して投稿 を選択した場合）",
+      "isMultiline": true,
+      "isVisible": false
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.Submit",
+      "title": "✅ 承認して投稿",
+      "style": "positive",
+      "data": {
+        "action": "approved",
+        "incident_id": "${incident_id}"
+      }
+    },
+    {
+      "type": "Action.ShowCard",
+      "title": "✏️ 修正して投稿",
+      "card": {
+        "type": "AdaptiveCard",
+        "body": [
+          {
+            "type": "Input.Text",
+            "id": "custom_response",
+            "label": "修正後の投稿文を入力してください",
+            "isMultiline": true,
+            "isRequired": true
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "投稿する",
+            "style": "positive",
+            "data": {
+              "action": "modified",
+              "incident_id": "${incident_id}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Action.Submit",
+      "title": "❌ キャンセル",
+      "style": "destructive",
+      "data": {
+        "action": "cancelled",
+        "incident_id": "${incident_id}"
+      }
+    }
+  ]
+}

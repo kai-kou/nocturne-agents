@@ -1,0 +1,50 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "☀️ おはようございます！昨夜の振り返りサマリーが届きました",
+      "weight": "Bolder",
+      "size": "Medium"
+    },
+    {
+      "type": "FactSet",
+      "facts": [
+        {
+          "title": "昨日のインシデント件数",
+          "value": "{incident_count}件"
+        },
+        {
+          "title": "承認済み対応",
+          "value": "{approved_count}件"
+        },
+        {
+          "title": "今日の要警戒キーワード",
+          "value": "{alert_keywords}"
+        }
+      ]
+    },
+    {
+      "type": "TextBlock",
+      "text": "📝 夜間振り返り PR（要確認）",
+      "weight": "Bolder"
+    },
+    {
+      "type": "ActionSet",
+      "actions": [
+        {
+          "type": "Action.OpenUrl",
+          "title": "PR を確認する",
+          "url": "{pr_url}"
+        },
+        {
+          "type": "Action.OpenUrl",
+          "title": "砦・読のメモを見る",
+          "url": "{nocturne_log_url}"
+        }
+      ]
+    }
+  ]
+}

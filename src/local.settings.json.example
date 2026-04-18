@@ -1,0 +1,27 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "COSMOS_ENDPOINT": "https://<account>.documents.azure.com:443/",
+    "COSMOS_KEY": "<your-cosmos-key>",
+    "COSMOS_DATABASE": "after-hours-agents",
+    "ENTRA_AGENT_ID_MIO_01": "<mio-01-agent-id>",
+    "ENTRA_AGENT_ID_TORIDE_06": "<toride-06-agent-id>",
+    "ENTRA_AGENT_ID_YOMI_04": "<yomi-04-agent-id>",
+    "ENTRA_AGENT_ID_DIGEST": "<digest-agent-id>",
+    "X_API_BEARER_TOKEN": "<x-api-bearer-token>",
+    "X_API_KEY": "<x-api-key>",
+    "X_API_SECRET": "<x-api-secret>",
+    "X_ACCESS_TOKEN": "<x-access-token>",
+    "X_ACCESS_TOKEN_SECRET": "<x-access-token-secret>",
+    "TEAMS_WEBHOOK_URL": "<teams-incoming-webhook-url>",
+    "GITHUB_TOKEN": "<github-pat-for-pr-creation>",
+    "GITHUB_REPO": "kai-kou/kinako-mocchi-hackathon",
+    "AZURE_OPENAI_ENDPOINT": "https://<resource>.openai.azure.com/",
+    "AZURE_OPENAI_API_KEY": "<azure-openai-key>",
+    "AZURE_OPENAI_DEPLOYMENT": "gpt-4o",
+    "RISK_SCORE_THRESHOLD": "70",
+    "X_POLL_KEYWORDS": "example_keyword1,example_keyword2"
+  }
+}

@@ -1,0 +1,71 @@
+# src/personas/_schema.yaml — Persona Card の完全版スキーマ定義（バリデーション用）
+# 各エージェント YAML はこのスキーマに準拠すること
+
+persona_id: string            # 一意ID（例: "Mio-01"）
+display_name:
+  ja: string
+  en: string
+version: string               # semver（例: "1.0.0"）
+
+base_persona:
+  type: string                # kinako | mochi | neko | hybrid
+  blend:                      # hybrid のみ使用（合計 100）
+    kinako: integer
+    mochi: integer
+    neko: integer
+  traits:
+    - name: string
+      description: string
+  animal:
+    species: string
+    emoji: string
+    gender: string            # female | male | neutral
+  shift: string               # day | night | dawn
+  shift_hours_jst: string     # 例: "09:00-18:00"
+  favorite_food: string
+  favorite_drink: string
+  tension_max_behavior: string
+  drinking_tendency: string
+  catchphrase: string
+  nocturne_participation:
+    evening: boolean
+    morning: boolean
+    lunch: boolean
+
+client_persona:
+  enabled: boolean
+  override_name: string | null
+  override_traits: list
+  override_catchphrase: string | null
+
+mode:
+  current: string             # business | casual
+  business:
+    tone: string
+    response_format: string
+    language: string
+    forbidden_words: list
+    max_response_tokens: integer
+    require_source_citation: boolean
+  casual:
+    tone: string
+    response_format: string
+    language: string
+    allowed_slang: boolean
+    max_response_tokens: integer
+    nocturne_mode: boolean
+
+permissions:
+  tools_allowed: list
+  cosmos_access:
+    shared_core: string       # read_write | read_only | none
+    private_episodic_own: string
+    private_episodic_other: string
+  identity:
+    entra_agent_id_env: string
+    identity_type: string     # individual
+
+operational:
+  memory_retention_days: integer
+  max_daily_api_calls: integer
+  incident_threshold_score: integer

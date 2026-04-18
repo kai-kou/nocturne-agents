@@ -1,0 +1,55 @@
+# === 秘密情報 ===
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*_credentials.json
+azure-credentials.json
+service-account*.json
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# === TypeScript / Node ===
+node_modules/
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+.pnpm-store/
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# === ログ・一時ファイル ===
+*.log
+logs/
+scratch/
+tmp/
+*.tmp
+
+# === Claude Code ローカル設定 ===
+.claude/settings.local.json
+
+# === ハッカソン提出前の機密 draft ===
+drafts-private/
+.azure_creds
