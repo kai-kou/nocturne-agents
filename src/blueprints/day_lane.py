@@ -21,6 +21,7 @@ from agents.mio_01.tools import (
     save_post_history,
     x_search,
 )
+from agents.yutaka_02.agent import analyze_legal_risk
 from shared.cosmos_client import SharedCoreRepository
 from shared.models import AgentAnalysis, HumanAction
 
@@ -28,6 +29,7 @@ bp = func.Blueprint()
 logger = logging.getLogger(__name__)
 
 _RISK_THRESHOLD = int(os.environ.get("RISK_SCORE_THRESHOLD", "70"))
+_LEGAL_REVIEW_THRESHOLD = int(os.environ.get("LEGAL_REVIEW_THRESHOLD", "60"))
 _MONITOR_KEYWORDS = json.loads(os.environ.get("MONITOR_KEYWORDS", '["炎上","不買運動","謝罪要求"]'))
 _TEAMS_WEBHOOK_URL = os.environ.get("TEAMS_WEBHOOK_URL", "")
 
@@ -99,7 +101,30 @@ def x_poller(timer: func.TimerRequest) -> None:
                 risk_factors=analysis_dict.get("risk_factors", matched),
                 suggested_actions=analysis_dict.get("suggested_actions", []),
             )
-            create_incident(repo, [tweet_id], score, agent_analysis)
+            incident = create_incident(repo, [tweet_id], score, agent_analysis)
+
+            # 法的リスクが閾値を超える場合は豊（Yutaka-02）による法的分析を追加実行
+            if score >= _LEGAL_REVIEW_THRESHOLD:
+                logger.info(
+                    "x_poller: requesting legal analysis from Yutaka-02 for tweet %s",
+                    tweet_id,
+                )
+                legal_result = asyncio.run(
+                    analyze_legal_risk(
+                        incident_text=text,
+                        incident_id=incident.id,
+                        risk_factors=matched,
+                    )
+                )
+                incident_doc = repo.get(incident.id, partition_key="incident_log")
+                if incident_doc:
+                    incident_doc["yutaka_legal_analysis"] = legal_result
+                    repo.upsert(incident_doc)
+                logger.info(
+                    "x_poller: legal analysis done: level=%s requires_review=%s",
+                    legal_result.get("risk_level"),
+                    legal_result.get("requires_legal_review"),
+                )
 
     logger.info("x_poller: completed")
 
@@ -118,6 +143,30 @@ def analyze(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("tweet_text is required", status_code=400)
 
     result = asyncio.run(analyze_tweet(tweet_text, tweet_id))
+    return func.HttpResponse(json.dumps(result, ensure_ascii=False), mimetype="application/json")
+
+
+@bp.route(route="day/analyze-legal", methods=["POST"])
+def analyze_legal(req: func.HttpRequest) -> func.HttpResponse:
+    """豊による法的リスク分析エンドポイント（デバッグ用）。"""
+    try:
+        body = req.get_json()
+    except ValueError:
+        return func.HttpResponse("Invalid JSON", status_code=400)
+
+    tweet_text = body.get("tweet_text", "")
+    incident_id = body.get("incident_id", "manual")
+    industry = body.get("industry", "一般")
+    if not tweet_text:
+        return func.HttpResponse("tweet_text is required", status_code=400)
+
+    result = asyncio.run(
+        analyze_legal_risk(
+            incident_text=tweet_text,
+            incident_id=incident_id,
+            industry=industry,
+        )
+    )
     return func.HttpResponse(json.dumps(result, ensure_ascii=False), mimetype="application/json")
 
 
@@ -141,6 +190,7 @@ def send_card(req: func.HttpRequest) -> func.HttpResponse:
 
     analysis = incident.get("agent_analysis") or {}
     actions = analysis.get("suggested_actions", ["様子を見る", "コメント準備", "関係部署に連絡"])
+    legal = incident.get("yutaka_legal_analysis") or {}
 
     template = _load_card_template()
     card = _render_card(template, {
@@ -154,6 +204,8 @@ def send_card(req: func.HttpRequest) -> func.HttpResponse:
         "action_1": actions[0] if len(actions) > 0 else "",
         "action_2": actions[1] if len(actions) > 1 else "",
         "action_3": actions[2] if len(actions) > 2 else "",
+        "legal_risk_level": legal.get("risk_level", "未分析"),
+        "requires_legal_review": "要法務確認" if legal.get("requires_legal_review") else "法務確認不要",
     })
 
     sent = _send_teams_card(card)
