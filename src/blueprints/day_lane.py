@@ -116,10 +116,12 @@ def x_poller(timer: func.TimerRequest) -> None:
                         risk_factors=matched,
                     )
                 )
-                incident_doc = repo.get(incident.id, partition_key="incident_log")
-                if incident_doc:
+                try:
+                    incident_doc = repo.get(incident.id, partition_key="incident_log")
                     incident_doc["yutaka_legal_analysis"] = legal_result
                     repo.upsert(incident_doc)
+                except Exception as get_exc:  # noqa: BLE001
+                    logger.warning("x_poller: failed to persist legal analysis: %s", get_exc)
                 logger.info(
                     "x_poller: legal analysis done: level=%s requires_review=%s",
                     legal_result.get("risk_level"),
