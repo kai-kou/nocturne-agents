@@ -20,7 +20,7 @@
 
 ```
 09:30  澪 (Mio-01) が X のポーリングを開始
-       └─► 炎上リスク 87/100 の投稿を検知
+       └─► SNS ヘルスリスク 87/100 の投稿を検知
            └─► Teams に Adaptive Card 送信
                └─► 担当者が [承認] → X 投稿実行
 
@@ -51,7 +51,7 @@ curl https://func-aha-dev.azurewebsites.net/api/health
 
 ## Step 2: 昼レーン デモ / Daytime Lane Demo (5 分)
 
-### 2-1. 炎上リスク分析（澪）
+### 2-1. SNS ヘルスチェック（澪）
 
 ```bash
 curl -X POST https://func-aha-dev.azurewebsites.net/api/day/analyze \
@@ -86,7 +86,7 @@ curl -X POST https://func-aha-dev.azurewebsites.net/api/day/analyze \
 デモ用 Teams チャンネルを開き、以下の Card が届いていることを確認:
 
 ```
-[炎上リスク: HIGH 87/100]
+[SNS ヘルスリスク: HIGH 87/100]
 
 投稿: "弊社サービスの障害について、特に問題ありません..."
 
