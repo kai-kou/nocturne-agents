@@ -131,3 +131,52 @@ class AgentKnowledge(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = {"populate_by_name": True}
+
+
+class SimilarCase(BaseModel):
+    """過去の類似炎上事例（RAG 検索結果）。"""
+
+    case_id: str
+    title: str
+    similarity_score: float = Field(ge=0.0, le=1.0)
+    outcome: str = ""
+    lessons_learned: str = ""
+    applicable_actions: list[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+class AlternativeAction(BaseModel):
+    action: str
+    expected_outcome: str
+
+
+class RationaleInfo(BaseModel):
+    """AI が判断に至った根拠（Explainable Rationale）。"""
+
+    primary_factors: list[str] = Field(default_factory=list)
+    model_path: str = ""
+    alternatives_considered: list[AlternativeAction] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+class EscalationOption(BaseModel):
+    """ユーザーが選択できるエスカレーションアクション。"""
+
+    action: str
+    label: str
+
+    model_config = {"populate_by_name": True}
+
+
+_DEFAULT_ESCALATION_OPTIONS: list[dict[str, str]] = [
+    {"action": "approve", "label": "提案通り対応する"},
+    {"action": "escalate_pr", "label": "PR・広報部門に相談する"},
+    {"action": "escalate_legal", "label": "法務部門に相談する"},
+    {"action": "skip", "label": "対応を見送る"},
+]
+
+
+def default_escalation_options() -> list[dict[str, str]]:
+    return [{**opt} for opt in _DEFAULT_ESCALATION_OPTIONS]
