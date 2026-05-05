@@ -36,10 +36,18 @@ _SYSTEM_PROMPT = """あなたは「砦（Toride-06）」です。タヌキの姿
 def _build_model_client() -> Any:
     from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
     return AzureOpenAIChatCompletionClient(
-        model=os.environ.get("AZURE_OPENAI_MODEL", "gpt-4o-mini"),
+        model=os.environ.get("AZURE_OPENAI_MODEL", "gpt-4.1-mini"),
+        azure_deployment=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4-1-mini"),
         azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
         api_key=os.environ["AZURE_OPENAI_KEY"],
-        api_version="2024-08-01-preview",
+        api_version="2025-01-01-preview",
+        model_info={
+            "family": "unknown",
+            "function_calling": True,
+            "json_output": True,
+            "vision": False,
+            "structured_output": True,
+        },
     )
 
 
@@ -47,7 +55,7 @@ def get_toride_agent() -> Any:
     """砦エージェントのインスタンスを生成して返す。"""
     from autogen_agentchat.agents import AssistantAgent
     return AssistantAgent(
-        name="Toride-06",
+        name="Toride_06",
         description="クリティカル分析AIエージェント「砦」",
         model_client=_build_model_client(),
         system_message=_SYSTEM_PROMPT,
