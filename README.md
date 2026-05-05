@@ -5,17 +5,17 @@
 Microsoft Agent Hackathon 2026 提出プロダクト。
 提出用リポジトリ: [`kai-kou/nocturne-agents`](https://github.com/kai-kou/nocturne-agents)
 
-SNS 炎上を **昼は AI が検知・提案、夜は AI が反省・改善** するシフト制マルチエージェントシステム。
+SNS ヘルスチェックを **昼は AI が検知・提案、夜は AI が反省・改善** するシフト制マルチエージェントシステム。
 Human-in-the-loop 設計により、AI は **提案まで** を担当し、実行は必ず人間が承認する。
 
 ---
 
 ## プロダクト概要 / Product Overview
 
-**日本語**: X（旧 Twitter）で炎上リスクの高い投稿を検知し、専門エージェント 3 体が連携して対応案を作成。
+**日本語**: X（旧 Twitter）で SNS ヘルスリスクの高い投稿を検知し、専門エージェント 3 体が連携して発信トーン改善案を作成。
 夜間は自律的に振り返り Group Chat を行い、翌朝に改善 PR を自動作成する。
 
-**English**: A multi-agent system that monitors X (Twitter) for viral risk, coordinates three specialized
+**English**: A multi-agent system that monitors X (Twitter) for communication health risks, coordinates three specialized
 agents to draft responses, and autonomously runs overnight retrospectives to create improvement PRs by morning.
 
 ---
@@ -142,7 +142,7 @@ cd src && python -m pytest tests/unit/ -v
 ### クイックデモ (5 分) / Quick Demo
 
 ```bash
-# 1. 昼レーン: 炎上リスク分析
+# 1. 昼レーン: SNS ヘルスチェック
 curl -X POST https://func-aha-dev.azurewebsites.net/api/day/analyze \
   -H "Content-Type: application/json" \
   -d '{"tweet_id": "demo-001", "text": "テスト投稿"}'
@@ -162,7 +162,7 @@ curl -X POST https://func-aha-dev.azurewebsites.net/api/morning/digest/test
 kinako-mocchi-hackathon/
 ├── src/
 │   ├── agents/
-│   │   ├── mio_01/         # 澪: 炎上リスク検知・対応案生成
+│   │   ├── mio_01/         # 澪: SNS ヘルスチェック・対応案生成
 │   │   ├── toride_06/      # 砦: 批評・エスカレーション判断
 │   │   └── yomi_04/        # 読: パターン分類・知識蓄積
 │   ├── blueprints/
