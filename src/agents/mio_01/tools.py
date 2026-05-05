@@ -33,10 +33,34 @@ _RISK_WEIGHTS: dict[str, float] = {
 
 
 def get_x_client() -> tweepy.Client:
+    """X API v2 クライアント。OAuth 1.0a User Context（kinako-mocchi 流用）。
+
+    認証情報は kai-kou/kinako-mocchi の GitHub Variables から provision.sh が転記。
+    OAuth 1.0a なら自分のアカウントの owned reads が $0.001/req（他者の 1/5）で
+    取得できる。Bearer Token モードは X_BEARER_TOKEN がある時のみフォールバック。
+    """
+    if os.environ.get("X_BEARER_TOKEN"):
+        return tweepy.Client(
+            bearer_token=os.environ["X_BEARER_TOKEN"],
+            wait_on_rate_limit=False,  # rate limit は呼び出し側でスキップ判断
+        )
     return tweepy.Client(
-        bearer_token=os.environ["X_BEARER_TOKEN"],
-        wait_on_rate_limit=True,
+        consumer_key=os.environ["X_API_KEY"],
+        consumer_secret=os.environ["X_API_SECRET"],
+        access_token=os.environ["X_ACCESS_TOKEN"],
+        access_token_secret=os.environ["X_ACCESS_TOKEN_SECRET"],
+        wait_on_rate_limit=False,
     )
+
+
+def _tweet_to_dict(tweet: Any) -> dict[str, Any]:
+    return {
+        "tweet_id": str(tweet.id),
+        "text": tweet.text,
+        "author_id": str(tweet.author_id) if getattr(tweet, "author_id", None) else "",
+        "created_at": tweet.created_at.isoformat() if tweet.created_at else None,
+        "metrics": tweet.public_metrics or {},
+    }
 
 
 def x_search(keywords: list[str], max_results: int = 100) -> list[dict[str, Any]]:
@@ -51,15 +75,52 @@ def x_search(keywords: list[str], max_results: int = 100) -> list[dict[str, Any]
             tweet_fields=["created_at", "author_id", "text", "public_metrics"],
         )
         for tweet in resp.data or []:
-            tweets.append({
-                "tweet_id": str(tweet.id),
-                "text": tweet.text,
-                "author_id": str(tweet.author_id),
-                "created_at": tweet.created_at.isoformat() if tweet.created_at else None,
-                "metrics": tweet.public_metrics or {},
-            })
+            tweets.append(_tweet_to_dict(tweet))
+    except tweepy.TooManyRequests:
+        logger.warning("x_search: rate limited, skipping this cycle")
     except tweepy.TweepyException as exc:
         logger.warning("x_search error: %s", exc)
+    return tweets
+
+
+def x_get_filtered_home_timeline(target_user_ids: list[str],
+                                 max_results: int = 100) -> list[dict[str, Any]]:
+    """認証アカウントのホームタイムラインから指定 user_id のオリジナル投稿のみ抽出。
+
+    X API Free tier 制約により get_users_tweets / search_recent_tweets / get_user は
+    401 Unauthorized となるが、get_home_timeline は通る。そのため認証アカウント
+    （kinamocchi_tech）が監視対象（target_user_ids）をフォローしている前提で、
+    home_timeline からフィルタ抽出する設計に変更した。
+
+    フィルタ条件:
+    - author_id が target_user_ids に含まれる
+    - 投稿テキストが "RT @" で始まらない（手動 RT 除外・API の exclude が
+      home_timeline では効かない場合のフォールバック）
+
+    要件: 認証アカウントが監視対象ユーザーをフォローしていること。
+    """
+    if not target_user_ids:
+        return []
+    target_set = {str(uid) for uid in target_user_ids}
+    client = get_x_client()
+    tweets: list[dict[str, Any]] = []
+    try:
+        resp = client.get_home_timeline(
+            max_results=min(max(max_results, 5), 100),
+            exclude=["retweets", "replies"],
+            tweet_fields=["created_at", "author_id", "text", "public_metrics"],
+        )
+        for tweet in resp.data or []:
+            text = tweet.text or ""
+            # RT 除外（API の exclude が home_timeline で効かないことへのフォールバック）
+            if text.startswith("RT @"):
+                continue
+            if str(tweet.author_id) in target_set:
+                tweets.append(_tweet_to_dict(tweet))
+    except tweepy.TooManyRequests:
+        logger.warning("x_get_filtered_home_timeline: rate limited, skipping")
+    except tweepy.TweepyException as exc:
+        logger.warning("x_get_filtered_home_timeline error: %s", exc)
     return tweets
 
 
@@ -98,7 +159,7 @@ def save_post_history(
         risk_score=risk_score,
         keywords_matched=keywords_matched,
     )
-    repo.upsert(post.model_dump(by_alias=True))
+    repo.upsert(post.model_dump(by_alias=True, mode="json"))
     return post
 
 
@@ -107,13 +168,13 @@ def get_x_write_client() -> tweepy.Client:
         consumer_key=os.environ["X_API_KEY"],
         consumer_secret=os.environ["X_API_SECRET"],
         access_token=os.environ["X_ACCESS_TOKEN"],
-        access_token_secret=os.environ["X_ACCESS_SECRET"],
+        access_token_secret=os.environ["X_ACCESS_TOKEN_SECRET"],
     )
 
 
 def post_tweet(text: str) -> dict[str, Any]:
     """X API v2 で投稿を実行する。認証情報未設定時はグレースフルエラーを返す。"""
-    required_keys = ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"]
+    required_keys = ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET"]
     missing = [k for k in required_keys if not os.environ.get(k)]
     if missing:
         logger.warning("post_tweet skipped: missing env vars %s", missing)
@@ -149,5 +210,5 @@ def create_incident(
         tweet_ids=tweet_ids,
         agent_analysis=agent_analysis,
     )
-    repo.upsert(incident.model_dump())
+    repo.upsert(incident.model_dump(mode="json"))
     return incident
