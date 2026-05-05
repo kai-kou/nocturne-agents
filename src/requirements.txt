@@ -4,6 +4,9 @@ azure-identity==1.19.0
 azure-ai-projects==1.0.0b11
 autogen-agentchat==0.4.9
 autogen-ext[azure]==0.4.9
+autogen-ext[openai]==0.4.9
+openai>=1.50.0
+tiktoken>=0.7.0
 pydantic>=2.10.0,<3.0.0
 pyyaml==6.0.2
 httpx==0.27.2
