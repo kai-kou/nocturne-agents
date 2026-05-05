@@ -1,14 +1,14 @@
 """澪（Mio-01）エージェント — AutoGen AssistantAgent + 炎上リスク分析"""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from autogen_agentchat.agents import AssistantAgent
+from shared.vector_search import search_similar_cases
 
 from .tools import calculate_risk_score
 
@@ -56,8 +56,44 @@ def get_mio_agent() -> Any:
     )
 
 
+async def _build_transparency_fields(
+    risk_score: float,
+    risk_factors: list[str],
+    tweet_text: str,
+    model_path: str = "rule-based",
+) -> dict[str, Any]:
+    """Explainable Rationale / SimilarCases / Confidence / Escalation を構築する。"""
+    from shared.models import (
+        AlternativeAction,
+        RationaleInfo,
+        default_escalation_options,
+    )
+
+    confidence = min(1.0, risk_score / 100 * 0.9 + 0.1)
+    # search_similar_cases は同期 I/O を行うため asyncio.to_thread で実行する
+    similar = await asyncio.to_thread(search_similar_cases, tweet_text, 3)
+
+    alt_list: list[AlternativeAction] = []
+    if risk_score >= 70:
+        alt_list = [AlternativeAction(action="沈黙を保つ", expected_outcome="延焼リスク 2.3x（推定）")]
+
+    rationale = RationaleInfo(
+        primary_factors=risk_factors,
+        model_path=model_path,
+        alternatives_considered=alt_list,
+    )
+    return {
+        "confidence": round(confidence, 3),
+        "similar_cases": similar,
+        "rationale": rationale.model_dump(),
+        "escalation_options": default_escalation_options(),
+    }
+
+
 async def analyze_tweet(tweet_text: str, tweet_id: str) -> dict[str, Any]:
     """ツイートを澪に分析させてリスク評価辞書を返す。LLM 接続失敗時はルールベースにフォールバック。"""
+    base_result: dict[str, Any] = {}
+
     try:
         from autogen_agentchat.messages import TextMessage
         from autogen_core import CancellationToken
@@ -70,15 +106,34 @@ async def analyze_tweet(tweet_text: str, tweet_id: str) -> dict[str, Any]:
         raw = result.chat_message.content if result.chat_message else ""
         m = re.search(r"\{.*\}", raw, re.DOTALL)
         if m:
-            return json.loads(m.group())
+            base_result = json.loads(m.group())
     except Exception as exc:  # noqa: BLE001
         logger.warning("LLM analyze failed, falling back to rule-based: %s", exc)
 
-    score, factors = calculate_risk_score(tweet_text)
-    return {
-        "risk_score": score,
-        "risk_factors": factors,
-        "predicted_escalation_hours": 3,
-        "suggested_actions": ["様子を見る", "公式コメントを準備する", "関係部署に連絡する"],
-        "summary": "ルールベース分析（LLM 接続なし）",
-    }
+    if not base_result:
+        score, factors = calculate_risk_score(tweet_text)
+        base_result = {
+            "risk_score": score,
+            "risk_factors": factors,
+            "predicted_escalation_hours": 3,
+            "suggested_actions": ["様子を見る", "公式コメントを準備する", "関係部署に連絡する"],
+            "summary": "ルールベース分析（LLM 接続なし）",
+        }
+        model_path = "rule-based"
+    else:
+        model_path = (
+            f"{os.environ.get('AZURE_OPENAI_MODEL', 'gpt-4o-mini')}"
+            " → cosmos-vector-search → ranker"
+        )
+
+    try:
+        risk_score_val = float(base_result.get("risk_score", 0))
+    except (ValueError, TypeError):
+        risk_score_val = 0.0
+    transparency = await _build_transparency_fields(
+        risk_score=risk_score_val,
+        risk_factors=base_result.get("risk_factors", []),
+        tweet_text=tweet_text,
+        model_path=model_path,
+    )
+    return {**base_result, **transparency}
