@@ -6,6 +6,7 @@ import datetime
 import json
 import logging
 import os
+import re
 from typing import Any
 
 import azure.functions as func
@@ -23,7 +24,107 @@ _NOCTURNE_AGENT_ID_ENV = "ENTRA_AGENT_ID_TORIDE_06"
 
 
 async def _run_nocturne_group_chat(incidents: list[dict[str, Any]]) -> dict[str, Any]:
-    """砦と読の2エージェントで夜間 Group Chat を実行し振り返りサマリーを返す。"""
+    """砦と読の RoundRobinGroupChat で夜間 Group Chat を実行し振り返りサマリーを返す（#661）。"""
+    if not incidents:
+        return _empty_chat_result()
+    try:
+        return await _run_group_chat_autogen(incidents)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("RoundRobinGroupChat failed, falling back to sequential: %s", exc)
+        return await _run_group_chat_sequential(incidents)
+
+
+async def _run_group_chat_autogen(incidents: list[dict[str, Any]]) -> dict[str, Any]:
+    """AutoGen RoundRobinGroupChat で砦・読を会話させる（#661）。"""
+    from autogen_agentchat.conditions import MaxMessageTermination
+    from autogen_agentchat.teams import RoundRobinGroupChat
+    from agents.toride_06.agent import get_toride_agent
+    from agents.yomi_04.agent import get_yomi_agent
+
+    toride = get_toride_agent()
+    yomi = get_yomi_agent()
+    # 砦→読の順に 1 ラウンドずつ発言させる（2 メッセージで終了）
+    termination = MaxMessageTermination(max_messages=2)
+    team = RoundRobinGroupChat([toride, yomi], termination_condition=termination)
+
+    prompt = _build_group_chat_prompt(incidents)
+    task_result = await team.run(task=prompt)
+    return _parse_group_chat_result(task_result.messages, incidents)
+
+
+def _build_group_chat_prompt(incidents: list[dict[str, Any]]) -> str:
+    """インシデント一覧を Group Chat の初期プロンプトに整形する。"""
+    lines = [f"本日のインシデント {len(incidents)} 件を振り返ってください。\n"]
+    for i, inc in enumerate(incidents, 1):
+        analysis = inc.get("agent_analysis") or {}
+        lines.append(
+            f"## インシデント {i}: {inc.get('id', 'unknown')}\n"
+            f"- リスクスコア: {inc.get('risk_score', 0.0)}\n"
+            f"- リスク要因: {json.dumps(analysis.get('risk_factors') or [], ensure_ascii=False)}\n"
+            f"- 対応案: {json.dumps(analysis.get('suggested_actions') or [], ensure_ascii=False)}\n"
+        )
+    lines.append(
+        "\n砦は各対応案をクリティカルに批評し、読はパターンを分析してください。"
+        "各自の出力形式（JSON）に従って回答してください。"
+    )
+    return "\n".join(lines)
+
+
+def _parse_group_chat_result(
+    messages: list[Any],
+    incidents: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """RoundRobinGroupChat のメッセージリストから構造化結果を抽出する。"""
+    toride_results: list[dict[str, Any]] = []
+    yomi_results: list[dict[str, Any]] = []
+
+    for msg in messages:
+        source = getattr(msg, "source", "")
+        content = getattr(msg, "content", "") or ""
+        m = re.search(r"\{.*\}", content, re.DOTALL)
+        if not m:
+            continue
+        try:
+            parsed = json.loads(m.group())
+        except json.JSONDecodeError:
+            continue
+        if source == "Toride_06":
+            toride_results.append(parsed)
+        elif source == "Yomi_04":
+            yomi_results.append(parsed)
+
+    escalation_count = sum(1 for r in toride_results if r.get("escalation_required"))
+    patterns = [r.get("incident_pattern", "その他") for r in yomi_results]
+
+    return {
+        "incident_count": len(incidents),
+        "escalation_count": escalation_count,
+        "toride_critique_count": len(toride_results),
+        "yomi_patterns": list(set(patterns)),
+        "toride_summary": "; ".join(
+            r.get("critique_summary", "") for r in toride_results if r.get("critique_summary")
+        ),
+        "yomi_summary": "; ".join(
+            r.get("pattern_insight", "") for r in yomi_results if r.get("pattern_insight")
+        ),
+        "actions": _extract_improvement_actions(toride_results, yomi_results),
+    }
+
+
+def _empty_chat_result() -> dict[str, Any]:
+    return {
+        "incident_count": 0,
+        "escalation_count": 0,
+        "toride_critique_count": 0,
+        "yomi_patterns": [],
+        "toride_summary": "",
+        "yomi_summary": "",
+        "actions": [],
+    }
+
+
+async def _run_group_chat_sequential(incidents: list[dict[str, Any]]) -> dict[str, Any]:
+    """フォールバック: 砦・読を順序実行（AutoGen 利用不可時）。"""
     toride_results: list[dict[str, Any]] = []
     yomi_results: list[dict[str, Any]] = []
 
@@ -42,13 +143,12 @@ async def _run_nocturne_group_chat(incidents: list[dict[str, Any]]) -> dict[str,
 
     escalation_count = sum(1 for r in toride_results if r.get("escalation_required"))
     patterns = [r.get("incident_pattern", "その他") for r in yomi_results]
-    unique_patterns = list(set(patterns))
 
     return {
         "incident_count": len(incidents),
         "escalation_count": escalation_count,
         "toride_critique_count": sum(r.get("critique_count", 0) for r in toride_results),
-        "yomi_patterns": unique_patterns,
+        "yomi_patterns": list(set(patterns)),
         "toride_summary": "; ".join(
             r.get("critique_summary", "") for r in toride_results if r.get("critique_summary")
         ),
