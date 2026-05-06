@@ -72,6 +72,15 @@ def _load_card_template() -> dict[str, Any]:
         return json.load(f)
 
 
+def _risk_score_vars(risk_score: float) -> dict[str, str]:
+    """リスクスコアに応じた表示変数を返す（#656 条件付きカラー）。"""
+    if risk_score >= 70:
+        return {"risk_color": "Attention", "risk_emoji": "🔴", "risk_label": "CRITICAL"}
+    if risk_score >= 40:
+        return {"risk_color": "Warning", "risk_emoji": "🟡", "risk_label": "WARNING"}
+    return {"risk_color": "Good", "risk_emoji": "🟢", "risk_label": "INFO"}
+
+
 def _render_card(template: dict[str, Any], values: dict[str, str]) -> dict[str, Any]:
     """テンプレートの ${key} を values で安全に置換する（#669 JSON インジェクション対策）。
 
@@ -232,10 +241,12 @@ def send_card(req: func.HttpRequest) -> func.HttpResponse:
     legal = incident.get("yutaka_legal_analysis") or {}
 
     template = _load_card_template()
+    risk_score_val = float(incident.get("risk_score", 0))
     card = _render_card(template, {
         "incident_id": incident_id,
-        "risk_score": str(incident.get("risk_score", 0)),
+        "risk_score": str(int(risk_score_val)),
         "severity": incident.get("severity", ""),
+        **_risk_score_vars(risk_score_val),
         "predicted_escalation_hours": str(analysis.get("predicted_escalation_hours", 3)),
         "detected_at": incident.get("created_at", datetime.now(timezone.utc).isoformat()),
         "tweet_text": incident.get("tweet_ids", [""])[0],
