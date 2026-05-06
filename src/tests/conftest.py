@@ -11,3 +11,5 @@ os.environ.setdefault("ENTRA_AGENT_ID_MIO_01", "")
 os.environ.setdefault("ENTRA_AGENT_ID_TORIDE_06", "")
 os.environ.setdefault("ENTRA_AGENT_ID_YOMI_04", "")
 os.environ.setdefault("ENTRA_AGENT_ID_DIGEST", "")
+# HMAC 検証はテスト環境でスキップ（#668）
+os.environ.setdefault("COPILOT_HMAC_REQUIRED", "false")
