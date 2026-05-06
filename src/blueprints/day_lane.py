@@ -73,10 +73,16 @@ def _load_card_template() -> dict[str, Any]:
 
 
 def _render_card(template: dict[str, Any], values: dict[str, str]) -> dict[str, Any]:
-    """テンプレートの ${key} を values で置換した新しい辞書を返す。"""
+    """テンプレートの ${key} を values で安全に置換する（#669 JSON インジェクション対策）。
+
+    value を json.dumps でエスケープしてから JSON 文字列内に埋め込むことで、
+    ダブルクォートや改行を含む入力による構造破壊を防ぐ。
+    """
     raw = json.dumps(template)
     for key, val in values.items():
-        raw = raw.replace(f"${{{key}}}", str(val))
+        # json.dumps("v")[1:-1] → 引用符除去済みの JSON エスケープ済み文字列
+        safe_val = json.dumps(str(val))[1:-1]
+        raw = raw.replace(f"${{{key}}}", safe_val)
     return json.loads(raw)
 
 
