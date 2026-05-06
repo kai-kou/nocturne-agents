@@ -11,12 +11,20 @@
       "color": "Warning"
     },
     {
+      "type": "TextBlock",
+      "text": "${risk_emoji} ${risk_label}: ${risk_score} / 100",
+      "weight": "Bolder",
+      "size": "Large",
+      "color": "${risk_color}",
+      "spacing": "Small"
+    },
+    {
       "type": "FactSet",
       "facts": [
         { "title": "インシデントID", "value": "${incident_id}" },
-        { "title": "リスクスコア", "value": "${risk_score} / 100" },
         { "title": "重大度", "value": "${severity}" },
         { "title": "炎上予測", "value": "約 ${predicted_escalation_hours} 時間後" },
+        { "title": "法的リスク", "value": "${legal_risk_level} / ${requires_legal_review}" },
         { "title": "検出日時", "value": "${detected_at}" }
       ]
     },
@@ -42,7 +50,7 @@
       "type": "TextBlock",
       "text": "${risk_factors}",
       "wrap": true,
-      "color": "Attention"
+      "color": "${risk_color}"
     },
     {
       "type": "TextBlock",
@@ -64,13 +72,6 @@
       "type": "TextBlock",
       "text": "3️⃣ ${action_3}",
       "wrap": true
-    },
-    {
-      "type": "Input.Text",
-      "id": "custom_response",
-      "placeholder": "修正案を入力（修正して投稿 を選択した場合）",
-      "isMultiline": true,
-      "isVisible": false
     }
   ],
   "actions": [
