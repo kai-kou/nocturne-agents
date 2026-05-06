@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
 import logging
 import os
+import secrets
 import string
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,8 +35,36 @@ _RISK_THRESHOLD = int(os.environ.get("RISK_SCORE_THRESHOLD", "70"))
 _LEGAL_REVIEW_THRESHOLD = int(os.environ.get("LEGAL_REVIEW_THRESHOLD", "60"))
 _MONITOR_KEYWORDS = json.loads(os.environ.get("MONITOR_KEYWORDS", '["炎上","不買運動","謝罪要求"]'))
 _TEAMS_WEBHOOK_URL = os.environ.get("TEAMS_WEBHOOK_URL", "")
+_COPILOT_WEBHOOK_SECRET = os.environ.get("COPILOT_WEBHOOK_SECRET", "")
 
 _CARD_TEMPLATE_PATH = Path(__file__).parent.parent / "adaptive_cards" / "day_approval.json"
+
+
+def _verify_copilot_hmac(req: func.HttpRequest) -> bool:
+    """Copilot Studio Webhook の HMAC-SHA256 署名を検証する（#668）。
+
+    Copilot Studio は X-Webhook-Signature: sha256=<hex> ヘッダーを付与する。
+    COPILOT_WEBHOOK_SECRET 未設定かつ COPILOT_HMAC_REQUIRED=false の場合のみスキップ（開発用）。
+    """
+    secret = _COPILOT_WEBHOOK_SECRET
+    if not secret:
+        if os.environ.get("COPILOT_HMAC_REQUIRED", "true").lower() != "false":
+            logger.warning("COPILOT_WEBHOOK_SECRET not configured; rejecting request (#668)")
+            return False
+        logger.warning("COPILOT_WEBHOOK_SECRET not set; HMAC check skipped (dev mode)")
+        return True
+
+    signature_header = req.headers.get("X-Webhook-Signature", "")
+    if not signature_header.startswith("sha256="):
+        logger.warning("X-Webhook-Signature header missing or invalid")
+        return False
+
+    expected_hex = signature_header[len("sha256="):]
+    body = req.get_body()
+    computed_hex = hmac.new(
+        key=secret.encode("utf-8"), msg=body, digestmod=hashlib.sha256
+    ).hexdigest()
+    return secrets.compare_digest(computed_hex, expected_hex)
 
 
 def _load_card_template() -> dict[str, Any]:
@@ -221,6 +252,13 @@ def send_card(req: func.HttpRequest) -> func.HttpResponse:
 @bp.route(route="day/approve", methods=["POST"])
 def approve(req: func.HttpRequest) -> func.HttpResponse:
     """Copilot Studio からの承認 Webhook を受け取り、X API 投稿 or クローズ処理を行う。"""
+    if not _verify_copilot_hmac(req):
+        return func.HttpResponse(
+            json.dumps({"error": "unauthorized: invalid or missing HMAC signature"}),
+            mimetype="application/json",
+            status_code=401,
+        )
+
     try:
         body = req.get_json()
     except ValueError:
