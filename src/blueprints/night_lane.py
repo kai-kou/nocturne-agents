@@ -19,6 +19,8 @@ from agents.yomi_04.tools import classify_incident_pattern
 bp = func.Blueprint()
 logger = logging.getLogger(__name__)
 
+_NOCTURNE_AGENT_ID_ENV = "ENTRA_AGENT_ID_TORIDE_06"
+
 
 async def _run_nocturne_group_chat(incidents: list[dict[str, Any]]) -> dict[str, Any]:
     """砦と読の2エージェントで夜間 Group Chat を実行し振り返りサマリーを返す。"""
@@ -72,18 +74,17 @@ def _extract_improvement_actions(
     return actions[:5]
 
 
-def _fetch_today_incidents(cosmos_url: str, cosmos_key: str) -> list[dict[str, Any]]:
-    """Cosmos DB から本日のインシデントを取得する。失敗時は空リストを返す。"""
+def _fetch_today_incidents() -> list[dict[str, Any]]:
+    """Cosmos DB から本日のインシデントを取得する（#660 Entra Agent ID / #667 partition key）。"""
     try:
         from shared.cosmos_client import SharedCoreRepository
-        repo = SharedCoreRepository(cosmos_url, cosmos_key, "after-hours-agents", "shared_core")
+        repo = SharedCoreRepository(agent_id_env=_NOCTURNE_AGENT_ID_ENV)
         query = (
             "SELECT * FROM c WHERE c.container_type = 'incident_log' "
             "ORDER BY c.created_at DESC OFFSET 0 LIMIT 20"
         )
-        return list(repo.container.query_items(
-            query=query, enable_cross_partition_query=True
-        ))
+        # パーティションキーを明示指定してクロスパーティションスキャンを回避 (#667)
+        return repo.query(query, partition_key="incident_log")
     except Exception as exc:  # noqa: BLE001
         logger.warning("_fetch_today_incidents error: %s", exc)
         return []
@@ -94,9 +95,7 @@ def nocturne_trigger(timer: func.TimerRequest) -> None:
     """毎日 23:00 JST に夜間 Group Chat を自動起動する。"""
     if timer.past_due:
         logger.warning("nocturne_trigger timer is past due")
-    cosmos_url = os.environ.get("COSMOS_DB_URL", "")
-    cosmos_key = os.environ.get("COSMOS_DB_KEY", "")
-    incidents = _fetch_today_incidents(cosmos_url, cosmos_key)
+    incidents = _fetch_today_incidents()
     chat_result = asyncio.run(_run_nocturne_group_chat(incidents))
     logger.info("nocturne_trigger completed: %s incidents processed", chat_result["incident_count"])
 
@@ -105,9 +104,7 @@ def nocturne_trigger(timer: func.TimerRequest) -> None:
 def nocturne_start(req: func.HttpRequest) -> func.HttpResponse:
     """夜間 Group Chat をテスト用に手動起動する。"""
     logger.info("nocturne_start: manual trigger")
-    cosmos_url = os.environ.get("COSMOS_DB_URL", "")
-    cosmos_key = os.environ.get("COSMOS_DB_KEY", "")
-    incidents = _fetch_today_incidents(cosmos_url, cosmos_key)
+    incidents = _fetch_today_incidents()
     chat_result = asyncio.run(_run_nocturne_group_chat(incidents))
     return func.HttpResponse(
         json.dumps({"status": "ok", "result": chat_result}, ensure_ascii=False),
@@ -147,9 +144,7 @@ def pr_draft(req: func.HttpRequest) -> func.HttpResponse:
 @bp.route(route="night/summary", methods=["GET"])
 def night_summary(req: func.HttpRequest) -> func.HttpResponse:
     """最新の夜間振り返りサマリーを返す。"""
-    cosmos_url = os.environ.get("COSMOS_DB_URL", "")
-    cosmos_key = os.environ.get("COSMOS_DB_KEY", "")
-    incidents = _fetch_today_incidents(cosmos_url, cosmos_key)
+    incidents = _fetch_today_incidents()
     if not incidents:
         return func.HttpResponse(
             json.dumps({"summary": None}), mimetype="application/json"
@@ -161,19 +156,19 @@ def night_summary(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @bp.timer_trigger(schedule="0 0 8 * * *", arg_name="timer", run_on_startup=False)
-def morning_digest(timer: func.TimerRequest) -> None:
-    """毎日 08:00 JST に Teams Morning Digest Adaptive Card を送信する。"""
+async def morning_digest(timer: func.TimerRequest) -> None:
+    """毎日 08:00 JST に Teams Morning Digest Adaptive Card を送信する（#663 async化）。"""
     if timer.past_due:
         logger.warning("morning_digest timer is past due")
-    _send_morning_digest()
+    await _send_morning_digest_async()
     logger.info("morning_digest: completed")
 
 
 @bp.route(route="morning/digest/test", methods=["POST"])
-def morning_digest_test(req: func.HttpRequest) -> func.HttpResponse:
+async def morning_digest_test(req: func.HttpRequest) -> func.HttpResponse:
     """Morning Digest の手動送信テスト用エンドポイント。"""
     logger.info("morning_digest_test: manual trigger")
-    result = _send_morning_digest()
+    result = await _send_morning_digest_async()
     return func.HttpResponse(
         json.dumps(result, ensure_ascii=False),
         mimetype="application/json",
@@ -181,19 +176,18 @@ def morning_digest_test(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 
-def _send_morning_digest() -> dict[str, Any]:
-    """Teams Webhook に Morning Digest Adaptive Card を送信する。"""
+async def _send_morning_digest_async() -> dict[str, Any]:
+    """Teams Webhook に Morning Digest Adaptive Card を非同期送信する（#663）。"""
+    import pathlib
+
     webhook_url = os.environ.get("TEAMS_WEBHOOK_URL", "")
     if not webhook_url:
         logger.warning("TEAMS_WEBHOOK_URL 未設定のため Morning Digest 送信をスキップ")
         return {"status": "skipped", "message": "TEAMS_WEBHOOK_URL not configured"}
 
-    cosmos_url = os.environ.get("COSMOS_DB_URL", "")
-    cosmos_key = os.environ.get("COSMOS_DB_KEY", "")
-    incidents = _fetch_today_incidents(cosmos_url, cosmos_key)
+    incidents = _fetch_today_incidents()
     approved_count = sum(1 for i in incidents if i.get("human_action") == "approved")
 
-    import pathlib
     card_path = pathlib.Path(__file__).parent.parent / "adaptive_cards" / "morning_digest.json"
     card = json.loads(card_path.read_text(encoding="utf-8"))
     card_str = json.dumps(card, ensure_ascii=False)
@@ -202,11 +196,17 @@ def _send_morning_digest() -> dict[str, Any]:
     card_str = card_str.replace("{alert_keywords}", "モニタリング継続中")
     card_str = card_str.replace("{pr_url}", os.environ.get("NOCTURNE_PR_URL", "#"))
     card_str = card_str.replace("{nocturne_log_url}", os.environ.get("NOCTURNE_LOG_URL", "#"))
-    payload = {"type": "message", "attachments": [{"contentType": "application/vnd.microsoft.card.adaptive", "content": json.loads(card_str)}]}
+    payload = {
+        "type": "message",
+        "attachments": [{
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "content": json.loads(card_str),
+        }],
+    }
 
     try:
-        with httpx.Client(timeout=10.0) as client:
-            resp = client.post(webhook_url, json=payload)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(webhook_url, json=payload)
             resp.raise_for_status()
             return {"status": "sent", "incident_count": len(incidents)}
     except httpx.HTTPError as exc:
