@@ -35,6 +35,47 @@
 
 ---
 
+## ⏱️ 5分前チェックリスト / Pre-Demo Checklist
+
+デモ開始 5 分前に以下をすべて確認すること。チェックが外れていたら即座に対処にゃ。
+
+### 環境・接続
+
+- [ ] Azure Functions が起動中であること（ヘルスチェック URL が 200 を返す）
+- [ ] Teams デモ用チャンネルが開いていること（Adaptive Card の着信を確認できる状態）
+- [ ] GitHub の nocturne-agents リポジトリが開いていること（PR Draft 確認用）
+- [ ] Azure Portal の Cosmos DB モニタリングタブが開いていること（任意）
+
+### 環境変数・シークレット
+
+- [ ] `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_KEY` が設定済み
+- [ ] `TEAMS_WEBHOOK_URL` が設定済み（未設定の場合、Morning Digest は skipped になる）
+- [ ] `GITHUB_TOKEN` が設定済み（未設定の場合、PR Draft は dry-run になる）
+- [ ] X API: 未設定でも graceful skip するため必須ではない（スキップ前提で進行可）
+
+### 動作確認コマンド（コピペで即実行）
+
+```bash
+# ヘルスチェック（5秒以内に green が返ることを確認）
+curl -s https://func-aha-dev.azurewebsites.net/api/health | jq .status
+
+# デモデータ投入（昼レーンの準備）
+curl -s -X POST https://func-aha-dev.azurewebsites.net/api/day/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"tweet_id":"demo-warmup","text":"テスト","author":"@test","retweet_count":0,"reply_count":0}' \
+  | jq .risk_score
+```
+
+**判定基準:**
+
+| 結果 | 意味 | 対処 |
+|------|------|------|
+| `"status": "healthy"` | ✅ OK | そのまま進行 |
+| `"status": "degraded"` | ⚠️ 部分障害 | Troubleshooting を確認 |
+| タイムアウト / 5xx | ❌ 起動失敗 | Azure Portal でログを確認してにゃ |
+
+---
+
 ## Step 1: ヘルスチェック / Health Check (30 秒)
 
 ```bash
