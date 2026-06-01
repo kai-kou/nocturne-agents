@@ -57,10 +57,13 @@ agents to draft responses, and autonomously runs overnight retrospectives to cre
 
 ## デモ動画 / Demo Video
 
-> **制作中** — 提出前に YouTube URL をここに追加します。  
-> 5 分のウォークスルー動画: きなこ × もっちーキャラクターによる解説予定。
+[![After-Hours Agents デモ動画](https://img.youtube.com/vi/ImoKmMnqR28/maxresdefault.jpg)](https://youtu.be/ImoKmMnqR28)
 
-<!-- TODO: [![Demo Video](https://img.shields.io/badge/YouTube-デモ動画-red?style=for-the-badge&logo=youtube)](YOUTUBE_URL_HERE) -->
+[![Demo Video](https://img.shields.io/badge/YouTube-デモ動画-red?style=for-the-badge&logo=youtube)](https://youtu.be/ImoKmMnqR28)
+
+▶ **https://youtu.be/ImoKmMnqR28** （4分57秒）
+
+ハムスターの「もっちー」とセキセイインコの「きなこ」が、実際のダッシュボードを操作しながら After-Hours Agents の仕組み（昼夜2レーン・8体のエージェント・ノクターン会議・Human-in-the-loop）を解説します。
 
 ---
 
