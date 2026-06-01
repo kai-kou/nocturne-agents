@@ -1,9 +1,26 @@
 # After-Hours Agents — AI 放課後 / 夜間自律エージェント
 
-> **"おはようございます、昨夜の失敗、直しておきました。"**
+<p align="center">
+  <img src="assets/demo/demo_02_nocturne_bar.png" alt="Nocturne Bar — AI エージェントたちの夜" width="720"/>
+</p>
 
-Microsoft Agent Hackathon 2026 提出プロダクト。
-提出用リポジトリ: [`kai-kou/nocturne-agents`](https://github.com/kai-kou/nocturne-agents)
+<p align="center">
+  <strong>"おはようございます、昨夜の失敗、直しておきました。"</strong>
+</p>
+
+<p align="center">
+  <a href="https://func-aha-dev.azurewebsites.net/api/dashboard">
+    <img src="https://img.shields.io/badge/Live%20Demo-稼働中-brightgreen?style=for-the-badge&logo=azure-functions" alt="Live Demo"/>
+  </a>
+  <a href="https://github.com/kai-kou/nocturne-agents/blob/main/docs/zenn-article-draft.md">
+    <img src="https://img.shields.io/badge/Zenn-記事ドラフト-3EA8FF?style=for-the-badge&logo=zenn" alt="Zenn Article"/>
+  </a>
+  <img src="https://img.shields.io/badge/Hackathon-Microsoft%20Agent%202026-0078D4?style=for-the-badge&logo=microsoft" alt="Hackathon"/>
+</p>
+
+---
+
+**Microsoft Agent Hackathon 2026** 提出プロダクト。
 
 SNS ヘルスチェックを **昼は AI が検知・提案、夜は AI が反省・改善** するシフト制マルチエージェントシステム。
 Human-in-the-loop 設計により、AI は **提案まで** を担当し、実行は必ず人間が承認する。
@@ -20,6 +37,33 @@ agents to draft responses, and autonomously runs overnight retrospectives to cre
 
 ---
 
+## ライブデモ / Live Demo
+
+**稼働中デプロイ**: [https://func-aha-dev.azurewebsites.net/api/dashboard](https://func-aha-dev.azurewebsites.net/api/dashboard)
+
+<p align="center">
+  <img src="assets/demo/demo_05_live_demo_flow.gif" alt="ライブデモフロー" width="720"/>
+</p>
+
+上の GIF: ダッシュボード LP → SNS ヘルスチェック送信 → **リスクスコア 25/100** 判定のフロー。
+
+<p align="center">
+  <img src="assets/demo/demo_06_console_dashboard.png" alt="管理コンソール" width="720"/>
+</p>
+
+上の画像: `/api/console` — エージェント稼働状況・24h サマリーのリアルタイムダッシュボード。
+
+---
+
+## デモ動画 / Demo Video
+
+> **制作中** — 提出前に YouTube URL をここに追加します。  
+> 5 分のウォークスルー動画: きなこ × もっちーキャラクターによる解説予定。
+
+<!-- TODO: [![Demo Video](https://img.shields.io/badge/YouTube-デモ動画-red?style=for-the-badge&logo=youtube)](YOUTUBE_URL_HERE) -->
+
+---
+
 ## 看板 3 体 / Core Agents
 
 | # | 和名 | 英名 | 動物 | キャッチフレーズ | シフト |
@@ -28,6 +72,12 @@ agents to draft responses, and autonomously runs overnight retrospectives to cre
 | Toride-06 | **砦** | Toride | タヌキ 🦝 | 「反論できない対応は次の炎上の種」 | 夜勤 18:00–03:00 |
 | Yomi-04 | **読** | Yomi | フクロウ 🦉 | 「同じ火は、同じ場所からまた燃える」 | 夜勤 18:00–03:00 |
 
+<p align="center">
+  <img src="assets/demo/demo_03_agents_team.png" alt="エージェントチーム" width="540"/>
+</p>
+
+読は飲み会に参加しません。議事録だけ送ってきます。
+
 ---
 
 ## アーキテクチャ / Architecture
@@ -35,40 +85,41 @@ agents to draft responses, and autonomously runs overnight retrospectives to cre
 ```
 ┌─────────────────── 昼レーン (Daytime Lane) ────────────────────┐
 │                                                                  │
-│  X API ──5分ポーリング──► 澪 (Mio-01)                           │
-│                           │ スコアリング                         │
-│                           ▼                                      │
-│                   Adaptive Card 送信                             │
-│                           │                                      │
-│                    ┌──────┴──────┐                               │
-│                    ▼             ▼                               │
-│               [承認] ──── Copilot Studio ──── [修正/キャンセル]  │
-│                    │                                             │
-│                    ▼                                             │
-│              X 投稿実行 (Tweepy)                                 │
+│  X API ──1時間ポーリング──► 澪 (Mio-01)                         │
+│                              │ スコアリング + LLM 分析           │
+│                              ▼                                   │
+│                      Adaptive Card 送信                          │
+│                              │                                   │
+│                       ┌──────┴──────┐                           │
+│                       ▼             ▼                            │
+│                  [承認] ──── Copilot Studio ──── [修正/キャンセル]│
+│                       │                                          │
+│                       ▼                                          │
+│                 X 投稿実行 (Tweepy)                              │
 └──────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────── 夜レーン (Nighttime Lane) ───────────────────┐
 │                                                                  │
-│  18:00 Timer ──► 砦 (Toride-06) ──┐                             │
-│                                    ├─► AutoGen Group Chat        │
-│                  読 (Yomi-04) ────┘         │                    │
-│                                             ▼                    │
-│                                    改善アクション抽出             │
-│                                             │                    │
-│                                  GitHub PR Draft 作成             │
-│                                             │                    │
-│  08:00 Morning ──────────────── Teams Digest 送信                │
-│  Digest Timer                               │                    │
-│                                      人間がレビュー              │
-│                                      & マージ承認               │
+│  JST 23:00 Timer ──► 砦 (Toride-06) ──┐                         │
+│                                        ├─► AutoGen Group Chat    │
+│                      読 (Yomi-04) ────┘         │               │
+│                                                 ▼               │
+│                                        改善アクション抽出         │
+│                                                 │               │
+│                                       GitHub PR Draft 作成       │
+│                                                 │               │
+│  JST 08:00 ─────────────────────── Teams Digest 送信             │
+│  Morning Digest Timer                           │               │
+│                                          人間がレビュー           │
+│                                          & マージ承認            │
 └──────────────────────────────────────────────────────────────────┘
 
 共通インフラ:
-  Azure Functions 1.0 (Python) + Cosmos DB + Entra Agent ID (RBAC)
+  Azure Functions (Python 3.11) + Cosmos DB + Entra Agent ID (RBAC)
+  AutoGen 0.4.9 GroupChat + Copilot Studio Adaptive Card
 ```
 
-詳細アーキテクチャ図は [`docs/images/architecture.md`](docs/images/architecture.md) を参照にゃ。
+詳細アーキテクチャ図は [`docs/images/architecture.md`](docs/images/architecture.md) を参照。
 
 ---
 
@@ -76,8 +127,8 @@ agents to draft responses, and autonomously runs overnight retrospectives to cre
 
 | レイヤー | 採用技術 |
 |---------|---------|
-| エージェント基盤 | AutoGen 0.4.9 (`AssistantAgent` + `GroupChat`) |
-| ホスティング | Azure Functions 1.0 (Python 3.11, Consumption Plan) |
+| エージェント基盤 | AutoGen 0.4.9 (`AssistantAgent` + `RoundRobinGroupChat`) |
+| ホスティング | Azure Functions (Python 3.11, Consumption Plan) |
 | データ永続化 | Azure Cosmos DB for NoSQL |
 | 認証・権限管理 | Entra Agent ID + Managed Identity (RBAC) |
 | 人間承認フロー | Microsoft Teams Adaptive Card + Copilot Studio |
@@ -122,11 +173,14 @@ cd src && python -m pytest tests/unit/ -v
 
 ## API エンドポイント / Endpoints
 
-デプロイ後は [`docs/endpoints.md`](docs/endpoints.md) を参照にゃ。
+ライブ: `https://func-aha-dev.azurewebsites.net`  
+詳細は [`docs/endpoints.md`](docs/endpoints.md) を参照。
 
 | Method | Path | 説明 / Description |
 |--------|------|--------------------|
 | GET | `/api/health` | ヘルスチェック |
+| GET | `/api/dashboard` | ダッシュボード LP |
+| GET | `/api/console` | 管理コンソール（稼働状況・サマリー） |
 | POST | `/api/day/analyze` | 澪による手動分析 |
 | POST | `/api/day/approve` | Copilot Studio 承認 Webhook |
 | POST | `/api/night/nocturne/start` | 夜間 Group Chat 手動起動 |
@@ -135,31 +189,10 @@ cd src && python -m pytest tests/unit/ -v
 
 ---
 
-## デモ手順 / Demo Guide
-
-詳細は [`docs/demo-guide.md`](docs/demo-guide.md) を参照にゃ。
-
-### クイックデモ (5 分) / Quick Demo
-
-```bash
-# 1. 昼レーン: SNS ヘルスチェック
-curl -X POST https://func-aha-dev.azurewebsites.net/api/day/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"tweet_id": "demo-001", "text": "テスト投稿"}'
-
-# 2. 夜レーン: Group Chat 手動起動
-curl -X POST https://func-aha-dev.azurewebsites.net/api/night/nocturne/start
-
-# 3. Morning Digest 確認
-curl -X POST https://func-aha-dev.azurewebsites.net/api/morning/digest/test
-```
-
----
-
 ## ディレクトリ構成 / Directory Structure
 
 ```
-kinako-mocchi-hackathon/
+nocturne-agents/
 ├── src/
 │   ├── agents/
 │   │   ├── mio_01/         # 澪: SNS ヘルスチェック・対応案生成
@@ -167,12 +200,12 @@ kinako-mocchi-hackathon/
 │   │   └── yomi_04/        # 読: パターン分類・知識蓄積
 │   ├── blueprints/
 │   │   ├── day_lane.py     # 昼レーン (X ポーリング・承認フロー)
-│   │   └── night_lane.py   # 夜レーン (Group Chat・PR Draft・Morning Digest)
+│   │   └── night_lane.py   # 夜レーン (Group Chat・PR Draft・Digest)
 │   ├── personas/           # Persona Card YAML (各エージェント人格定義)
 │   ├── shared/             # Cosmos DB クライアント・Pydantic モデル
 │   └── tests/unit/         # pytest ユニットテスト
 ├── scripts/
-│   ├── provision.sh        # Azure リソース自動プロビジョニング
+│   ├── provision.sh        # Azure リソース自動プロビジョニング (Bicep IaC)
 │   ├── deploy.sh           # Azure Functions デプロイ
 │   └── azure-auth.sh       # Azure 認証ヘルパー
 ├── docs/
@@ -180,7 +213,8 @@ kinako-mocchi-hackathon/
 │   ├── demo-guide.md       # デモ手順書
 │   ├── zenn-article-draft.md  # Zenn 記事ドラフト
 │   └── images/             # アーキテクチャ図
-└── .github/workflows/      # CI/CD (provision / deploy)
+├── assets/demo/            # スクリーンショット・デモ素材
+└── .github/workflows/      # CI/CD (provision / deploy / OIDC)
 ```
 
 ---
@@ -193,8 +227,9 @@ Apache-2.0
 
 ## 関連リンク / Links
 
-- [Zenn 記事](docs/zenn-article-draft.md) — ハッカソン必須提出物
+- [ライブデモ](https://func-aha-dev.azurewebsites.net/api/dashboard) — 稼働中の Azure Functions
+- [Zenn 記事ドラフト](docs/zenn-article-draft.md)
 - [デモ手順書](docs/demo-guide.md)
 - [エンドポイント一覧](docs/endpoints.md)
-- [MVP 設計書](docs/mvp-design.md)
-- 提出用リポジトリ: `kai-kou/nocturne-agents`
+- [アーキテクチャ図](docs/images/architecture.md)
+- 提出用リポジトリ: [`kai-kou/nocturne-agents`](https://github.com/kai-kou/nocturne-agents)
